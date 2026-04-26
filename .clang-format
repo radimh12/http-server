@@ -1,3 +1,5 @@
+AllowShortFunctionsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: true
 BasedOnStyle: LLVM
 ColumnLimit: 120
 ContinuationIndentWidth: 2

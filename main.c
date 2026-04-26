@@ -1,3 +1,5 @@
+#include "http_server.h"
+
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <stdio.h>
@@ -22,7 +24,7 @@ static const struct addrinfo addrinfo_hints = {
   .ai_flags = AI_PASSIVE,
 };
 
-static uint8_t message[MESSAGE_MAX_SIZE];
+static char message_buffer[MESSAGE_MAX_SIZE];
 
 static void get_ip_address(struct sockaddr *sockaddr, struct ip_address *ip) {
   void *src;
@@ -109,12 +111,15 @@ int main(void) {
     get_ip_address((struct sockaddr *)(&addr), &ip);
     printf("Accepted connection from %s\n", ip.str);
 
-    ssize_t message_size = recv(sockfd, message, sizeof message, 0);
+    // message size is limited to buffer size - 1 so that the string is always zero-terminated
+    ssize_t message_size = recv(sockfd, message_buffer, sizeof message_buffer - 1, 0);
     if (message_size == -1)
       perror("error: recv");
 
     close(sockfd);
-    printf("%.*s\n", (int)(message_size), message);
+
+    struct string message = {.data = message_buffer, .size = message_size};
+    message_parse(message);
   }
 
   return 0;
