@@ -109,17 +109,22 @@ int main(void) {
 
     struct ip_address ip;
     get_ip_address((struct sockaddr *)(&addr), &ip);
+
+    printf("--------------------------------------------------\n");
     printf("Accepted connection from %s\n", ip.str);
 
     // message size is limited to buffer size - 1 so that the string is always zero-terminated
-    ssize_t message_size = recv(sockfd, message_buffer, sizeof message_buffer - 1, 0);
-    if (message_size == -1)
-      perror("error: recv");
+    ssize_t request_size = recv(sockfd, message_buffer, sizeof message_buffer - 1, 0);
+    if (request_size == -1) perror("error: recv");
+
+    struct string request = {.data = message_buffer, .size = request_size};
+    message_parse(request);
+
+    char response[] = "HTTP/1.1 501";
+    ssize_t response_size = send(sockfd, response, sizeof response - 1, 0);
+    if (response_size == -1) perror("error: send");
 
     close(sockfd);
-
-    struct string message = {.data = message_buffer, .size = message_size};
-    message_parse(message);
   }
 
   return 0;
