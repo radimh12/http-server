@@ -10,4 +10,18 @@ struct string {
   int32_t size;
 };
 
-extern void message_parse(struct string input);
+struct request_target {
+  struct string path;
+  struct string query;
+};
+
+struct message {
+  struct string method;
+  struct request_target request_target;
+  struct {
+    uint8_t major;
+    uint8_t minor;
+  } version;
+};
+
+extern bool message_parse(struct string input, struct message *message);

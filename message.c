@@ -8,12 +8,8 @@ constexpr struct string CRLF = str("\x0D\x0A");
 struct context {
   struct string input;
   const char *current;
+  struct message message;
   bool error;
-};
-
-struct request_target {
-  struct string path;
-  struct string query;
 };
 
 static bool is_alpha(uint32_t ch) {
@@ -144,23 +140,14 @@ static struct request_target parse_request_target(struct context *ctx) {
 
 // rfc9112: 3. Request Line
 static void parse_request_line(struct context *ctx) {
-  struct string method = expect_token(ctx);
+  ctx->message.method = expect_token(ctx);
   expect_char(ctx, ' ');
-
-  // TODO: actually parse request target
-  struct request_target request_target = parse_request_target(ctx);
-
+  ctx->message.request_target = parse_request_target(ctx);
   expect_char(ctx, ' ');
-
   expect_string(ctx, str("HTTP/"));
-  uint32_t major = expect_digit(ctx);
+  ctx->message.version.major = expect_digit(ctx);
   expect_char(ctx, '.');
-  uint32_t minor = expect_digit(ctx);
-
-  printf("method: %.*s\n", method.size, method.data);
-  printf("http version: %u.%u\n", major, minor);
-  printf("request target: %.*s\n", request_target.path.size, request_target.path.data);
-  printf("query: %.*s\n", request_target.query.size, request_target.query.data);
+  ctx->message.version.minor = expect_digit(ctx);
 }
 
 // rfc9110: 5. Fields
@@ -184,7 +171,7 @@ static void parse_field_line(struct context *ctx) {
 }
 
 // rfc9112: 2. Message
-void message_parse(struct string input) {
+bool message_parse(struct string input, struct message *message) {
   struct context ctx = {
     .input = input,
     .current = input.data,
@@ -200,5 +187,8 @@ void message_parse(struct string input) {
     expect_string(&ctx, CRLF);
   }
 
-  printf("parse result: %s\n", ctx.error ? "failed" : "OK");
+  if (ctx.error) return false;
+
+  *message = ctx.message;
+  return true;
 }

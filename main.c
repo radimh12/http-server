@@ -118,7 +118,16 @@ int main(void) {
     if (request_size == -1) perror("error: recv");
 
     struct string request = {.data = message_buffer, .size = request_size};
-    message_parse(request);
+    struct message message;
+
+    if (message_parse(request, &message)) {
+      printf("method: %.*s\n", message.method.size, message.method.data);
+      printf("http version: %u.%u\n", message.version.major, message.version.minor);
+      printf("request target: %.*s\n", message.request_target.path.size, message.request_target.path.data);
+      printf("query: %.*s\n", message.request_target.query.size, message.request_target.query.data);
+    } else {
+      fprintf(stderr, "failed to parse request message\n");
+    }
 
     // char response[] = "HTTP/1.1 501";
     char response[] = "hello?";
