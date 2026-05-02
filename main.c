@@ -12,7 +12,7 @@
 #define DEFAULT_HOST "localhost"
 #define DEFAULT_PORT "1202"
 #define BACKLOG 10
-#define MESSAGE_MAX_SIZE 4096
+#define MESSAGE_MAX_SIZE 8192
 
 struct ip_address {
   uint8_t version;
@@ -123,9 +123,22 @@ int main(void) {
     printf("--------------------------------------------------\n");
     printf("Accepted connection from %s\n", ip.str);
 
-    // message size is limited to buffer size - 1 so that the string is always zero-terminated
-    ssize_t request_size = recv(sockfd, message_buffer, sizeof message_buffer - 1, 0);
+    ssize_t request_size = recv(sockfd, message_buffer, sizeof message_buffer, 0);
     if (request_size == -1) perror("error: recv");
+
+    // message size is limited to buffer size - 1 so that the string is always zero-terminated
+    if (request_size == MESSAGE_MAX_SIZE) {
+      // read everything that is left in the socket
+      do {
+        request_size = recv(sockfd, message_buffer, sizeof message_buffer, MSG_DONTWAIT);
+        printf(">> %ld\n", request_size);
+      } while (request_size > 0);
+
+      fprintf(stderr, "error: recv: exceeded max message size\n");
+      char response[] = "HTTP/1.1 501\r\n\r\n";
+      send_message(sockfd, response, sizeof response - 1);
+      goto close;
+    }
 
     struct string request = {.data = message_buffer, .size = request_size};
     struct message message;
@@ -137,19 +150,20 @@ int main(void) {
       printf("query: %.*s\n", message.request_target.query.size, message.request_target.query.data);
 
       if (equals(message.request_target.path, str("/"))) {
-        char response[] = "HTTP/1.1 200\x0D\x0A\x0D\x0A";
+        char response[] = "HTTP/1.1 200\r\n\r\n";
         send_message(sockfd, response, sizeof response - 1);
         send_message(sockfd, index_html, sizeof index_html);
       } else {
-        char response[] = "HTTP/1.1 404\x0D\x0A\x0D\x0A";
+        char response[] = "HTTP/1.1 404\r\n\r\n";
         send_message(sockfd, response, sizeof response - 1);
       }
     } else {
       fprintf(stderr, "failed to parse request message\n");
-      char response[] = "HTTP/1.1 501\x0D\x0A\x0D\x0A";
+      char response[] = "HTTP/1.1 501\r\n\r\n";
       send_message(sockfd, response, sizeof response - 1);
     }
 
+  close:
     close(sockfd);
   }
 
