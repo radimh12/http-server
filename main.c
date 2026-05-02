@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -26,6 +27,10 @@ static const struct addrinfo addrinfo_hints = {
 
 static char message_buffer[MESSAGE_MAX_SIZE];
 
+static const char index_html[] = {
+#embed "resources/index.html"
+};
+
 static void get_ip_address(struct sockaddr *sockaddr, struct ip_address *ip) {
   void *src;
   int family = sockaddr->sa_family;
@@ -44,6 +49,11 @@ static void get_ip_address(struct sockaddr *sockaddr, struct ip_address *ip) {
     perror("error: inet_ntop");
     ip->str[0] = 0;
   }
+}
+
+static void send_message(int sockfd, const void *data, size_t size) {
+  ssize_t res = send(sockfd, data, size, 0);
+  if (res == -1) perror("error: send");
 }
 
 int main(void) {
@@ -125,14 +135,20 @@ int main(void) {
       printf("http version: %u.%u\n", message.version.major, message.version.minor);
       printf("request target: %.*s\n", message.request_target.path.size, message.request_target.path.data);
       printf("query: %.*s\n", message.request_target.query.size, message.request_target.query.data);
+
+      if (equals(message.request_target.path, str("/"))) {
+        char response[] = "HTTP/1.1 200\x0D\x0A\x0D\x0A";
+        send_message(sockfd, response, sizeof response - 1);
+        send_message(sockfd, index_html, sizeof index_html);
+      } else {
+        char response[] = "HTTP/1.1 404\x0D\x0A\x0D\x0A";
+        send_message(sockfd, response, sizeof response - 1);
+      }
     } else {
       fprintf(stderr, "failed to parse request message\n");
+      char response[] = "HTTP/1.1 501\x0D\x0A\x0D\x0A";
+      send_message(sockfd, response, sizeof response - 1);
     }
-
-    // char response[] = "HTTP/1.1 501";
-    char response[] = "hello?";
-    ssize_t response_size = send(sockfd, response, sizeof response - 1, 0);
-    if (response_size == -1) perror("error: send");
 
     close(sockfd);
   }

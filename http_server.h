@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #define str(s) (struct string){.data = (s), .size = sizeof(s) - 1}
 
@@ -25,3 +26,7 @@ struct message {
 };
 
 extern bool message_parse(struct string input, struct message *message);
+
+static inline bool equals(struct string a, struct string b) {
+  return a.size == b.size && memcmp(a.data, b.data, a.size) == 0;
+}
