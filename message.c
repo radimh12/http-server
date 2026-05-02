@@ -11,21 +11,43 @@ struct context {
   bool error;
 };
 
+struct request_target {
+  struct string path;
+  struct string query;
+};
+
+static bool is_alpha(uint32_t ch) {
+  return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+}
+
+static bool is_digit(uint32_t ch) {
+  return (ch >= '0' && ch <= '9');
+}
+
+static bool is_hexdigit(uint32_t ch) {
+  return (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z');
+}
+
 static bool is_token_character(uint32_t ch) {
   return ch == '!' || ch == '#' || ch == '$' || ch == '%' || ch == '&' || ch == '\'' || ch == '*' || ch == '+' ||
-         ch == '-' || ch == '.' || ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' ||
-         (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+         ch == '-' || ch == '.' || ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~' || is_alpha(ch) ||
+         is_digit(ch);
 }
 
 static bool is_field_character(uint32_t ch) {
   return (ch >= '!' && ch <= '~') || (ch >= 0x80 && ch <= 0xff);
 }
 
-static void expect_char(struct context *ctx, uint32_t ch) {
-  if ((uint32_t)(*ctx->current) == ch)
+static bool accept_char(struct context *ctx, uint32_t ch) {
+  if ((uint32_t)(*ctx->current) == ch) {
     ctx->current++;
-  else
-    ctx->error = true;
+    return true;
+  }
+  return false;
+}
+
+static void expect_char(struct context *ctx, uint32_t ch) {
+  if (!accept_char(ctx, ch)) ctx->error = true;
 }
 
 static struct string expect_token(struct context *ctx) {
@@ -71,13 +93,62 @@ static void accept_whitespace(struct context *ctx) {
     ctx->current++;
 }
 
+static bool accept_pchar(struct context *ctx) {
+  uint32_t ch = ctx->current[0];
+
+  if (ch == '%' && is_hexdigit(ctx->current[1]) && is_hexdigit(ctx->current[2])) {
+    ctx->current += 3;
+    return true;
+  }
+
+  if (is_alpha(ch) || is_digit(ch) || ch == '-' || ch == '.' || ch == '_' || ch == '~' || ch == '!' || ch == '$' ||
+      ch == '&' || ch == '\'' || ch == '(' || ch == ')' || ch == '*' || ch == '+' || ch == ',' || ch == ';' ||
+      ch == '=' || ch == '-' || ch == '.' || ch == '_' || ch == '~') {
+    ctx->current++;
+    return true;
+  }
+
+  return false;
+}
+
+static struct request_target parse_request_target(struct context *ctx) {
+  struct string path = {};
+  struct string query = {};
+
+  if (accept_char(ctx, '/')) { // origin form
+    path.data = ctx->current - 1;
+
+    while (accept_pchar(ctx))
+      ;
+
+    if (accept_char(ctx, '/'))
+      while (accept_pchar(ctx))
+        ;
+
+    path.size = ctx->current - path.data;
+
+    // optional query
+    if (accept_char(ctx, '?')) {
+      query.data = ctx->current - 1;
+      while (accept_pchar(ctx) || accept_char(ctx, '/') || accept_char(ctx, '?'))
+        ;
+      query.size = ctx->current - query.data;
+    }
+  } else {
+    ctx->error = true;
+    // TODO: implement absolute-form / authority-form / asterisk-form
+  }
+
+  return (struct request_target){.path = path, .query = query};
+}
+
 // rfc9112: 3. Request Line
 static void parse_request_line(struct context *ctx) {
   struct string method = expect_token(ctx);
   expect_char(ctx, ' ');
 
   // TODO: actually parse request target
-  expect_char(ctx, '/');
+  struct request_target request_target = parse_request_target(ctx);
 
   expect_char(ctx, ' ');
 
@@ -88,6 +159,8 @@ static void parse_request_line(struct context *ctx) {
 
   printf("method: %.*s\n", method.size, method.data);
   printf("http version: %u.%u\n", major, minor);
+  printf("request target: %.*s\n", request_target.path.size, request_target.path.data);
+  printf("query: %.*s\n", request_target.query.size, request_target.query.data);
 }
 
 // rfc9110: 5. Fields

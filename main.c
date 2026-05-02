@@ -120,7 +120,8 @@ int main(void) {
     struct string request = {.data = message_buffer, .size = request_size};
     message_parse(request);
 
-    char response[] = "HTTP/1.1 501";
+    // char response[] = "HTTP/1.1 501";
+    char response[] = "hello?";
     ssize_t response_size = send(sockfd, response, sizeof response - 1, 0);
     if (response_size == -1) perror("error: send");
 
