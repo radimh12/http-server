@@ -1,6 +1,7 @@
 #include "http_server.h"
 
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -13,6 +14,8 @@
 #define DEFAULT_PORT "1202"
 #define BACKLOG 10
 #define MESSAGE_MAX_SIZE 8192
+#define RESOURCE_MAX_SIZE (64ul * 1024 * 1024)
+#define RESOURCE_PATH_MAX_SIZE 1024
 
 struct ip_address {
   uint8_t version;
@@ -26,10 +29,40 @@ static const struct addrinfo addrinfo_hints = {
 };
 
 static char message_buffer[MESSAGE_MAX_SIZE];
+static char resource_buffer[RESOURCE_MAX_SIZE];
+static char resource_path_buffer[RESOURCE_PATH_MAX_SIZE];
 
-static const char index_html[] = {
-#embed "resources/index.html"
-};
+static bool create_resource_path(struct string str) {
+  size_t used = 0;
+
+  used += snprintf(&resource_path_buffer[used], RESOURCE_PATH_MAX_SIZE - used, "resources/");
+  used += snprintf(&resource_path_buffer[used], RESOURCE_PATH_MAX_SIZE - used, "%.*s", str.size, str.data);
+
+  if (used >= RESOURCE_PATH_MAX_SIZE) {
+    fprintf(stderr, "error: resource path \"%.*s\" exceeded maximum size\n", str.size, str.data);
+    return false;
+  }
+
+  return true;
+}
+
+static size_t load_resource(const char *path) {
+  int fd = open(path, O_RDONLY);
+  if (fd == -1) {
+    perror("error: open");
+    return 0;
+  }
+
+  ssize_t size = read(fd, resource_buffer, sizeof resource_buffer);
+  if (size == -1) {
+    perror("error: read");
+    return 0;
+  }
+
+  close(fd);
+
+  return size;
+}
 
 static void get_ip_address(struct sockaddr *sockaddr, struct ip_address *ip) {
   void *src;
@@ -157,16 +190,29 @@ int main(void) {
       }
 
       if (equals(message.request_target.path, str("/"))) {
+        size_t resource_size = load_resource("resources/index.html");
         char response[] = "HTTP/1.1 200\r\n\r\n";
         send_message(sockfd, response, sizeof response - 1);
-        send_message(sockfd, index_html, sizeof index_html);
+        send_message(sockfd, resource_buffer, resource_size);
       } else {
-        char response[] = "HTTP/1.1 404\r\n\r\n";
-        send_message(sockfd, response, sizeof response - 1);
+        if (create_resource_path(message.request_target.path)) {
+          size_t resource_size = load_resource(resource_path_buffer);
+          if (resource_size > 0) {
+            char response[] = "HTTP/1.1 200\r\n\r\n";
+            send_message(sockfd, response, sizeof response - 1);
+            send_message(sockfd, resource_buffer, resource_size);
+          } else {
+            printf("resource not found\n");
+            char response[] = "HTTP/1.1 404\r\n\r\n";
+            send_message(sockfd, response, sizeof response - 1);
+          }
+        } else {
+          char response[] = "HTTP/1.1 500\r\n\r\n";
+          send_message(sockfd, response, sizeof response - 1);
+        }
       }
     } else {
-      fprintf(stderr, "failed to parse request message\n");
-      char response[] = "HTTP/1.1 501\r\n\r\n";
+      char response[] = "HTTP/1.1 400\r\n\r\n";
       send_message(sockfd, response, sizeof response - 1);
     }
 

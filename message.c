@@ -177,8 +177,6 @@ bool message_parse(struct string input, struct message *message) {
     .current = input.data,
   };
 
-  printf("%.*s\n", (int)(input.size), input.data);
-
   parse_request_line(&ctx);
   expect_string(&ctx, CRLF);
 
