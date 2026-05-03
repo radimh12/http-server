@@ -148,6 +148,13 @@ int main(void) {
       printf("http version: %u.%u\n", message.version.major, message.version.minor);
       printf("request target: %.*s\n", message.request_target.path.size, message.request_target.path.data);
       printf("query: %.*s\n", message.request_target.query.size, message.request_target.query.data);
+      printf("fields:\n");
+
+      for (size_t idx = 0; idx < message.header_fields.capacity; idx++) {
+        struct hashmap_item *item = &message.header_fields.data[idx];
+        if (item->key.size != 0)
+          printf("  %.*s: %.*s\n", item->key.size, item->key.data, item->value.size, item->value.data);
+      }
 
       if (equals(message.request_target.path, str("/"))) {
         char response[] = "HTTP/1.1 200\r\n\r\n";

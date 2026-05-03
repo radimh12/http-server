@@ -167,7 +167,7 @@ static void parse_field_line(struct context *ctx) {
 
   accept_whitespace(ctx);
 
-  printf("field: '%.*s' = '%.*s'\n", name.size, name.data, value.size, value.data);
+  hashmap_insert(&ctx->message.header_fields, name, value);
 }
 
 // rfc9112: 2. Message

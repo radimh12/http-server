@@ -1,5 +1,5 @@
 EXECUTABLE = http_server
-OBJECTS = main.o message.o
+OBJECTS = hashmap.o main.o message.o
 HEADERS = http_server.h
 WARNINGS = -Wall -Wextra -Werror
 CFLAGS = -std=gnu23 -g
